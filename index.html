@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Планировщик поездок</title>
+  <title>Маршруты и заметки</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://api-maps.yandex.ru/2.1/?apikey=8e052adf-4944-44f7-a471-5dff85304d55&lang=ru_RU" type="text/javascript"></script>
 </head>
@@ -14,23 +14,30 @@
       <ul class="nav-links">
         <li><a href="#home">Главная</a></li>
         <li><a href="#planner">План поездки</a></li>
+        <li><a href="#saved">Сохраненные</a></li>
         <li><a href="#contact">Контакты</a></li>
       </ul>
     </nav>
   </header>
 
   <section id="home">
-    <h2>Планируйте свои маршруты</h2>
-    <p>Добавьте несколько остановок и постройте маршрут.</p>
+    <h2>Планируйте и сохраняйте свои маршруты</h2>
+    <p>Добавьте остановки, постройте маршрут и сохраните его для будущего использования.</p>
   </section>
 
   <section id="planner">
-    <h2>Маршрут</h2>
+    <h2>Планировщик маршрута</h2>
     <input type="text" id="pointInput" placeholder="Введите точку маршрута" />
     <button onclick="addPoint()">Добавить точку</button>
     <button onclick="buildTrip()">Построить маршрут</button>
+    <button onclick="saveTrip()">Сохранить маршрут</button>
     <ul id="pointsList"></ul>
     <div id="map-container"></div>
+  </section>
+
+  <section id="saved">
+    <h2>Сохраненные маршруты</h2>
+    <ul id="savedRoutesList"></ul>
   </section>
 
   <section id="contact">
@@ -57,6 +64,8 @@
         myMap.setCenter(userCoords, 14);
         myMap.geoObjects.add(new ymaps.Placemark(userCoords, { balloonContent: "Вы здесь" }, { preset: "islands#blueDotIcon" }));
       });
+
+      loadSavedRoutes();
     }
 
     function addPoint() {
@@ -72,15 +81,18 @@
       input.value = "";
     }
 
-    function buildTrip() {
+    function buildTrip(points = null) {
+      const routePoints = points || tripPoints;
       if (!userCoords) return alert("Не удалось определить местоположение");
-      if (tripPoints.length === 0) return alert("Добавьте хотя бы одну точку");
+      if (routePoints.length === 0) return alert("Добавьте хотя бы одну точку");
 
       const referencePoints = [userCoords];
-      const geocodePromises = tripPoints.map(address => ymaps.geocode(address).then(res => {
-        const coords = res.geoObjects.get(0).geometry.getCoordinates();
-        referencePoints.push(coords);
-      }));
+      const geocodePromises = routePoints.map(address =>
+        ymaps.geocode(address).then(res => {
+          const coords = res.geoObjects.get(0).geometry.getCoordinates();
+          referencePoints.push(coords);
+        })
+      );
 
       Promise.all(geocodePromises).then(() => {
         const multiRoute = new ymaps.multiRouter.MultiRoute({
@@ -91,6 +103,42 @@
         myMap.geoObjects.removeAll();
         myMap.geoObjects.add(multiRoute);
       });
+    }
+
+    function saveTrip() {
+      if (tripPoints.length === 0) return alert("Нет точек для сохранения");
+
+      const name = prompt("Введите название маршрута:");
+      if (!name) return;
+
+      const saved = JSON.parse(localStorage.getItem("savedTrips") || "[]");
+      saved.push({ name, points: tripPoints });
+      localStorage.setItem("savedTrips", JSON.stringify(saved));
+
+      tripPoints = [];
+      document.getElementById("pointsList").innerHTML = "";
+      loadSavedRoutes();
+    }
+
+    function loadSavedRoutes() {
+      const saved = JSON.parse(localStorage.getItem("savedTrips") || "[]");
+      const list = document.getElementById("savedRoutesList");
+      list.innerHTML = "";
+
+      saved.forEach((trip, index) => {
+        const li = document.createElement("li");
+        li.innerHTML = `<strong>${trip.name}</strong> 
+                        <button onclick="buildTripFromStorage(${index})">Построить</button>`;
+        list.appendChild(li);
+      });
+    }
+
+    function buildTripFromStorage(index) {
+      const saved = JSON.parse(localStorage.getItem("savedTrips") || "[]");
+      const trip = saved[index];
+      if (trip) {
+        buildTrip(trip.points);
+      }
     }
   </script>
 </body>
