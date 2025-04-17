@@ -3,59 +3,48 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Сайт с Яндекс Навигатором</title>
+  <title>Планировщик поездок</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://api-maps.yandex.ru/2.1/?apikey=8e052adf-4944-44f7-a471-5dff85304d55&lang=ru_RU" type="text/javascript"></script>
 </head>
 <body>
   <header>
     <nav class="navbar">
-      <h1 class="logo">МойСайт</h1>
+      <h1 class="logo">Навигация+</h1>
       <ul class="nav-links">
         <li><a href="#home">Главная</a></li>
-        <li><a href="#about">О нас</a></li>
-        <li><a href="#services">Услуги</a></li>
-        <li><a href="#map">Навигатор</a></li>
+        <li><a href="#planner">План поездки</a></li>
         <li><a href="#contact">Контакты</a></li>
       </ul>
     </nav>
   </header>
 
   <section id="home">
-    <h2>Добро пожаловать!</h2>
-    <p>Это сайт с Яндекс-картой и навигацией.</p>
+    <h2>Планируйте свои маршруты</h2>
+    <p>Добавьте несколько остановок и постройте маршрут.</p>
   </section>
 
-  <section id="about">
-    <h2>О нас</h2>
-    <p>Мы крутая компания. Убедись сам!</p>
-  </section>
-
-  <section id="services">
-    <h2>Наши услуги</h2>
-    <p>От хлеба до навигации — всё под рукой!</p>
-  </section>
-
-  <section id="map">
-    <h2>Навигатор</h2>
-    <p>Введите адрес назначения:</p>
-    <input type="text" id="destinationInput" placeholder="Например: Арбат, Москва" />
-    <button onclick="buildRoute()">Построить маршрут</button>
+  <section id="planner">
+    <h2>Маршрут</h2>
+    <input type="text" id="pointInput" placeholder="Введите точку маршрута" />
+    <button onclick="addPoint()">Добавить точку</button>
+    <button onclick="buildTrip()">Построить маршрут</button>
+    <ul id="pointsList"></ul>
     <div id="map-container"></div>
   </section>
 
   <section id="contact">
     <h2>Контакты</h2>
-    <p>Email: example@email.com</p>
+    <p>Email: support@navigationplus.ru</p>
   </section>
 
   <footer>
-    <p>© 2025 МойСайт. Все права защищены.</p>
+    <p>© 2025 Навигация+. Все права защищены.</p>
   </footer>
 
   <script>
     ymaps.ready(init);
-    let myMap, userCoords;
+    let myMap, userCoords, tripPoints = [];
 
     function init() {
       myMap = new ymaps.Map("map-container", {
@@ -70,30 +59,34 @@
       });
     }
 
-    function buildRoute() {
-      const destinationAddress = document.getElementById("destinationInput").value;
-      if (!destinationAddress) {
-        alert("Введите адрес.");
-        return;
-      }
+    function addPoint() {
+      const input = document.getElementById("pointInput");
+      const address = input.value.trim();
+      if (!address) return alert("Введите адрес");
 
-      ymaps.geocode(destinationAddress).then(function (res) {
-        const firstGeoObject = res.geoObjects.get(0);
-        const destinationCoords = firstGeoObject.geometry.getCoordinates();
+      const list = document.getElementById("pointsList");
+      const li = document.createElement("li");
+      li.textContent = address;
+      list.appendChild(li);
+      tripPoints.push(address);
+      input.value = "";
+    }
 
-        if (!userCoords) {
-          alert("Не удалось определить ваше местоположение.");
-          return;
-        }
+    function buildTrip() {
+      if (!userCoords) return alert("Не удалось определить местоположение");
+      if (tripPoints.length === 0) return alert("Добавьте хотя бы одну точку");
 
+      const referencePoints = [userCoords];
+      const geocodePromises = tripPoints.map(address => ymaps.geocode(address).then(res => {
+        const coords = res.geoObjects.get(0).geometry.getCoordinates();
+        referencePoints.push(coords);
+      }));
+
+      Promise.all(geocodePromises).then(() => {
         const multiRoute = new ymaps.multiRouter.MultiRoute({
-          referencePoints: [userCoords, destinationCoords],
-          params: {
-            routingMode: 'auto'
-          }
-        }, {
-          boundsAutoApply: true
-        });
+          referencePoints: referencePoints,
+          params: { routingMode: 'auto' }
+        }, { boundsAutoApply: true });
 
         myMap.geoObjects.removeAll();
         myMap.geoObjects.add(multiRoute);
